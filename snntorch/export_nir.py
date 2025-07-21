@@ -1,4 +1,4 @@
-#from typing import Optional
+# from typing import Optional
 from typing import Optional, Tuple, Union
 import torch
 import os
@@ -7,7 +7,6 @@ import nir
 import numpy as np
 import nirtorch
 import snntorch as snn
-
 
 
 def _extract_snntorch_module(module: torch.nn.Module) -> Optional[nir.NIRNode]:
@@ -39,7 +38,7 @@ def _extract_snntorch_module(module: torch.nn.Module) -> Optional[nir.NIRNode]:
             groups=module.groups,
         )
     """
-    #modifiying bias of the conv2d layer extraction 
+    # modifiying bias of the conv2d layer extraction
     if isinstance(module, torch.nn.Conv2d):
         return nir.Conv2d(
             input_shape=None,
@@ -48,7 +47,7 @@ def _extract_snntorch_module(module: torch.nn.Module) -> Optional[nir.NIRNode]:
             padding=module.padding,
             dilation=module.dilation,
             groups=module.groups,
-            #better handle for the bias if it's False
+            # better handle for the bias if it's False
             bias=(
                 module.bias.detach()
                 if isinstance(module.bias, torch.Tensor)
@@ -58,9 +57,9 @@ def _extract_snntorch_module(module: torch.nn.Module) -> Optional[nir.NIRNode]:
     elif isinstance(module, torch.nn.AvgPool2d):
         return nir.AvgPool2d(
             kernel_size=module.kernel_size,  # (Height, Width)
-            stride=module.kernel_size
-            if module.stride is None
-            else module.stride,  # (Height, width)
+            stride=(
+                module.kernel_size if module.stride is None else module.stride
+            ),  # (Height, width)
             padding=(0, 0),  # (Height, width)
         )
 
@@ -250,6 +249,18 @@ def export_to_nir(
         model_fwd_args=model_fwd_args,
         ignore_dims=ignore_dims,
     )
+
+    # Reset potentially invalid output types, and let the type inference infer the types below.
+    def reset_output_types(graph):
+        for node in graph.nodes.values():
+            if isinstance(node, nir.Output):
+                node.input_type = {"input": None}
+                node.output_type = {"output": None}
+            elif isinstance(node, nir.NIRGraph):
+                reset_output_types(node)
+
+    reset_output_types(nir_graph)
+
     # ensure node input and output types are fully defined
     nir_graph.infer_types()
     return nir_graph
